@@ -1,0 +1,35 @@
+[
+  {
+    "id": "pkg_res_basic",
+    "name": "Starter Residential Proxies",
+    "type": "Residential",
+    "pool_size": "10,000,000+ IPs",
+    "pricing": "$15 / month",
+    "bandwidth": "5 GB included",
+    "features": ["Country-level targeting", "HTTP/S & SOCKS5 support", "99.9% Uptime"],
+    "description": "Perfect for basic web scraping, light automation, and bypassing localized IP blocks on a budget.",
+    "checkout_url": "https://example-payment-gateway.com/checkout/res-basic"
+  },
+  {
+    "id": "pkg_res_premium",
+    "name": "Advanced Residential Pro",
+    "type": "Residential",
+    "pool_size": "50,000,000+ IPs",
+    "pricing": "$45 / month",
+    "bandwidth": "20 GB included",
+    "features": ["City & ASN-level rotation", "Sticky sessions up to 60 mins", "Unlimited concurrent threads"],
+    "description": "Designed for heavy data aggregation, sneaker bots, and scaled market research with granular geofencing.",
+    "checkout_url": "https://example-payment-gateway.com/checkout/res-premium"
+  },
+  {
+    "id": "pkg_dc_unlimited",
+    "name": "Unmetered Datacenter Dedicated",
+    "type": "Datacenter",
+    "pool_size": "5,000 Static IPs",
+    "pricing": "$25 / month",
+    "bandwidth": "Unlimited GB",
+    "features": ["1 Gbps dedicated port speeds", "Zero bandwidth throttling", "Fixed static allocation"],
+    "description": "Best for high-speed continuous streaming, account management pipelines, and scraping targets without rigid anti-bot blocks.",
+    "checkout_url": "https://example-payment-gateway.com/checkout/dc-unlimited"
+  }
+] 
