@@ -1,0 +1,65 @@
+What authentication methods do you support?
+We support both User-Pass (username and password) authentication and IP Whitelisting. You can configure up to 5 whitelisted IPs per gateway slot in your network dashboard.
+
+How do I handle connection timeouts with high-threaded scraping?
+If you experience frequent connection timeouts, increase your proxy handshake limit to 1500ms in your script configuration. We recommend maintaining a max pool of 50 concurrent threads per sticky session ID to prevent resource throttling.
+
+What is your refund policy on data transfer allocations?
+We offer a 3-day money-back guarantee on all residential plans, provided that your bandwidth consumption does not exceed 100MB of data transfer during that window. Datacenter and mobile plans are non-refundable once allocated.
+
+Can I use your proxies to register a PayPal account?
+Yes, residential proxies are generally better performing on high-security sites like PayPal compared to datacenter IPs, which are more likely to be blocked by fraud detection systems.
+
+Do you have a free trial for residential proxies?
+Yes, we offer trials on a case-by-case basis. To request a trial, you must register on our website at https://dashboard.torchproxies.com/. After registering, provide our support team via Discord or Chatbot with your email address, specify which residential plan or ISP region you would like to test, and include your use case. The team will review your request and guide you through the available trial options.
+
+How can I get a free trial for ISP proxies?
+We provide trial access on a case-by-case basis. Please register on our dashboard, contact support via Discord or Chatbot with your registered email, specify the ISP region you are interested in, and explain your use case. The team will evaluate your request and provide a trial IP if eligible.
+
+What is the minimum order for ISP proxies?
+The minimum order for ISP proxies is 5 IPs per package. This policy was implemented to enhance overall network stability, align with industry standards, and address increased instances of abuse and policy changes from upstream providers.
+
+Can I buy a single ISP proxy for testing?
+No, we do not offer single ISP proxies for purchase. However, we can provide a single trial IP valid for 24 hours to test our service before you commit to a 5-IP package.
+
+Are your ISP proxies dedicated/private?
+Yes, all our ISP proxies are fully dedicated and are never shared with other users. Once your subscription is active, you are the sole user of those IP addresses.
+
+Will my ISP proxy IPs remain the same if I renew my subscription?
+Yes, as long as you maintain your subscription and renew before it expires, you will generally retain the same IPs. We recommend renewing 24-48 hours before your expiry date to avoid losing your IPs, as they are returned to the pool upon expiration and may be reassigned to other users.
+
+What happens to my ISP proxies if I cancel my subscription?
+After cancellation, your subscription will remain active until the end of your current billing cycle. You will continue to have access to your proxies until that date. After the cycle ends, your access will automatically stop, and you won't be charged again. The IPs will be returned to the pool and may be reassigned to other users.
+
+How can I cancel my ISP proxy subscription?
+To cancel, navigate to Purchase → ISP Proxies → Billing & History. Find your active subscription and click the "Manage Subscriptions" button. This will open the Stripe customer portal where you can select the active plan and confirm the cancellation.
+
+What protocols do your ISP proxies support?
+Our ISP proxies support HTTP, HTTPS, SOCKS5, and UDP protocols. The ports are: HTTP/HTTPS - 61234, SOCKS5 - 62234, and UDP - 65535.
+
+Which countries do you offer ISP proxies for?
+We offer ISP proxies for a wide range of countries including United Kingdom, Canada, Germany, France, Netherlands, Italy, United States, Hong Kong, Korea, Japan, and Australia. Each region has separate plans for specific use cases.
+
+What ISPs/carriers do you use for your US ISP proxies?
+Our US ISP proxy pools include AT&T, Windstream, RCN, Wave, Cogent, Spectrum/Charter, and Frontier. These are mixed automatically based on availability at the time of allocation.
+
+Do you have Canadian ISP proxies?
+Yes, we offer Canadian ISP proxies. Currently, our Premium Canada Ticket Proxies, Sneaker Proxies, and Retail Proxies are located in Toronto and use Rogers as the ISP carrier. We are also working on adding Telus and GTT in the future.
+
+Do your Canadian ISP proxies work on Walmart Canada?
+Our current Rogers-based Canadian ISP proxies are known to have issues bypassing Walmart Canada's bot protection when enabled. For Walmart Canada, we generally recommend our residential plan X or we can check for alternative working ranges.
+
+Do you support city/state level targeting for ISP proxies?
+No, ISP proxies do not support city or state level targeting. They only support country-level targeting. If you need precise geo-targeting by city or state, you should use our residential proxy plans.
+
+Can I choose specific carriers/ASNs for my ISP proxies?
+By default, ASNs are assigned from a mixed pool, so you cannot select specific carriers like Cogent, RCN, or Spectrum. For bulk purchases of 150+ IPs, we can sometimes accommodate custom routing or cleaner allocations.
+
+What fraud score do your ISP proxies have?
+Most of our ISP proxies maintain a 0 fraud score on Scamalytics, especially our Social and Retail pools. However, we cannot guarantee a specific score on third-party databases like IPQualityScore or IP2Location as they may use outdated data.
+
+What is your replacement policy for ISP proxies?
+We offer replacements if an issue is determined to be caused by the proxy itself (e.g., not functioning as intended). Replacements must be reported within 24 hours of receiving the proxies. We do not replace proxies that are blocked or banned due to usage patterns or target website restrictions.
+
+Do you have discount codes for ISP proxies?
+Yes, we currently offer 20% off ISP proxies with the code **BHWISP20** at checkout. This discount is available for Blackhatworld members and can be used for both new subscriptions and top-ups.
