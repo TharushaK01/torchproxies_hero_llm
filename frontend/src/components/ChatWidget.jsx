@@ -110,11 +110,33 @@ setMessages(updatedMessages);
             <div className={`p-2 h-8 w-8 rounded-full flex items-center justify-center shrink-0 text-white ${msg.role === 'user' ? 'bg-blue-600' : 'bg-slate-800'}`}>
               {msg.role === 'user' ? <User size={16} /> : <Bot size={16} />}
             </div>
-            <div className={`p-3 rounded-2xl text-sm leading-relaxed whitespace-pre-wrap shadow-sm ${msg.role === 'user' ? 'bg-blue-600 text-white rounded-tr-none' : 'bg-white text-slate-800 border border-slate-100 rounded-tl-none'}`}>
-              {msg.content}
-            </div>
+{/* The updated container with the smart markdown link parser inside */}
+        <div className={`p-3 rounded-2xl shadow-sm ${msg.role === 'user' ? 'bg-blue-600 text-white rounded-tr-none' : 'bg-white text-slate-800 border border-slate-100 rounded-tl-none'}`}>
+          <div className="text-sm whitespace-pre-wrap leading-relaxed">
+            {msg.content.split(/(\[[^\]]+\]\([^)]+\))/g).map((part, index) => {
+              const match = part.match(/\[([^\]]+)\]\(([^)]+)\)/);
+              if (match) {
+                return (
+                  <a 
+                    key={index} 
+                    href={match[2]} 
+                    target="_blank" 
+                    rel="noopener noreferrer" 
+                    className="inline-flex items-center mx-1 px-3 py-1 bg-blue-600 hover:bg-blue-700 text-white font-medium rounded text-xs transition-colors duration-200 shadow-sm"
+                  >
+                    {match[1]}
+                    <svg className="w-3 h-3 ml-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+                    </svg>
+                  </a>
+                );
+              }
+              return part;
+            })}
           </div>
-        ))}
+        </div>
+      </div>
+    ))}
         {isLoading && messages[messages.length - 1]?.content === '' && (
           <div className="flex gap-3 max-w-[85%] mr-auto">
             <div className="p-2 h-8 w-8 rounded-full flex items-center justify-center bg-slate-800 text-white shrink-0"><Bot size={16} /></div>

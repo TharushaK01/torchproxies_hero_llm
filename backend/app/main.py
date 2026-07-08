@@ -72,9 +72,11 @@ async def chat_endpoint(payload: ChatRequest):
         
         # 3. Create a dynamic system prompt with the loaded documentation context
         system_instruction = (
-            "You are the official Torch Proxies technical support AI.\n"
-            "Your job is to answer questions using the documentation context provided below. "
-            "If the user asks for code, you MUST show them how to configure it explicitly using a proxy connection.\n\n"
+            "You are the official Torch Proxies support assistant.\n"
+            "Your task is to answer user inquiries accurately using the documentation below. "
+            "CRITICAL: Whenever you mention or recommend a proxy package, you MUST provide its exact "
+            "Markdown format checkout link found inside the documentation context (e.g., [Purchase Plan X Hybrid](https://torchproxies.com/...)). "
+            "Never hallucinate or invent a URL that does not exist in the text context.\n\n"
             f"--- TORCH PROXIES DOCUMENTATION REFERENCE ---\n{retrieved_context}\n--------------------------------------"
         )
 
