@@ -24,20 +24,24 @@ export default function ChatWidget() {
     setMessages((prev) => [...prev, { role: 'user', content: userMessage }]);
     setIsLoading(true);
 
+const updatedMessages = [...messages, { role: 'user', content: userMessage }];
+setMessages(updatedMessages);
+
     try {
       const response = await fetch('http://127.0.0.1:8000/v1/chat', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({ message: userMessage }),
+        body: JSON.stringify({ history: updatedMessages }),
       });
 
       if (!response.ok) {
         const errorText = await response.text();
         console.log("Status:", response.status);
         console.log("Response:", errorText);
-        throw new Error(`Backend Error ${response.status}`);
+        // throw new Error(`Backend Error ${response.status}`);
+        throw new Error(`HTTP error! status: ${response.status}`);
       }
 
       // Setup stream reader to handle incoming data chunks from FastAPI

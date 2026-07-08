@@ -2,6 +2,7 @@ from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
+from typing import List, Dict, Any
 import ollama
 import chromadb
 import json
@@ -21,13 +22,20 @@ chroma_client = chromadb.PersistentClient(path="./chroma_db")
 collection = chroma_client.get_or_create_collection(name="proxy_knowledge")
 
 class ChatRequest(BaseModel):
-    message: str
+    # message: str
+    history: List[Dict[str, str]]
 
 @app.post("/v1/chat")
 async def chat_endpoint(payload: ChatRequest):
     try:
+
+        user_messages =  [m for m in payload.history if m["role"] == "user"]
+        if not user_messages:
+            raise HTTPException(status_code=400, detail="No user message found in the request history.")
+        latest_query = user_messages[-1]["content"]
+        
         # FIX: Generate embedding using nomic-embed-text and the correct .embed() syntax
-        query_embedding_resp = ollama.embed(model="nomic-embed-text", input=payload.message)
+        query_embedding_resp = ollama.embed(model="nomic-embed-text", input=latest_query)
         query_embedding = query_embedding_resp["embeddings"][0]
         
         # Search ChromaDB
@@ -51,13 +59,12 @@ async def chat_endpoint(payload: ChatRequest):
             f"--- CUSTOM DOCUMENTATION REFERENCE ---\n{retrieved_context}\n--------------------------------------"
         )
 
+        formatted_messages = payload.history
+
         def event_generator():
             response_stream = ollama.chat(
-                model='gemma',
-                messages=[
-                    {'role': 'system', 'content': system_instruction},
-                    {'role': 'user', 'content': payload.message}
-                ],
+                model='qwen2.5-coder:7b',
+                messages=formatted_messages,
                 options={'temperature': 0.2}, # Lower temperature keeps answers tied accurately to context
                 stream=True
             )
@@ -71,7 +78,7 @@ async def chat_endpoint(payload: ChatRequest):
 
     except Exception as e:
         print(f"Internal Backend Crash Error: {str(e)}")
-        raise HTTPException(status_code=500, detail=f"Ollama RAG Error: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Ollama Memory Error: {str(e)}")
 
 @app.get("/health")
 async def health_check():
