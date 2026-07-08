@@ -1,6 +1,8 @@
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, UploadFile, File, Form
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse
+import os
+import shutil
 from pydantic import BaseModel
 from typing import List, Dict, Any
 import ollama
@@ -17,22 +19,35 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+UPLOAD_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), "../..uploads"))
+os.makedirs(UPLOAD_DIR, exist_ok=True)
+
 # Connect to the persistent ChromaDB database folder
 chroma_client = chromadb.PersistentClient(path="./chroma_db")
 collection = chroma_client.get_or_create_collection(name="proxy_knowledge")
 
-class ChatRequest(BaseModel):
-    # message: str
-    history: List[Dict[str, str]]
+
+# class ChatRequest(BaseModel):
+#     # message: str
+#     history: List[Dict[str, str]]
 
 @app.post("/v1/chat")
-async def chat_endpoint(payload: ChatRequest):
+async def chat_endpoint(
+    history: str = Form(...),
+    file: UploadFile = File(None)  # Optional file upload
+):
     try:
-
-        user_messages =  [m for m in payload.history if m["role"] == "user"]
+        chat_history = json.loads(history)
+        user_messages =  [m for m in chat_history if m["role"] == "user"]
         if not user_messages:
             raise HTTPException(status_code=400, detail="No user message found in the request history.")
         latest_query = user_messages[-1]["content"]
+
+        saved_file_path = None
+        if file is not None and file.filename:
+            saved_file_path = os.path.join(UPLOAD_DIR, file.filename)
+            with open(saved_file_path, "wb") as buffer:
+                shutil.copyfileobj(file.file, buffer)
 
         OFF_TOPIC_KEYWORDS = [
             "recipe", "cooking", "food", "dish", "meal", "ingredients", "chocolate chips", "pasta", "soup", "dessert", "bake", "grill", "fry", "boil", "roast", "saute", "stir-fry", "simmer",
@@ -59,6 +74,7 @@ async def chat_endpoint(payload: ChatRequest):
         query_embedding_resp = ollama.embed(model="nomic-embed-text", input=latest_query)
         query_embedding = query_embedding_resp["embeddings"][0]
         
+        
         # Search ChromaDB
         results = collection.query(
             query_embeddings=[query_embedding],
@@ -68,7 +84,7 @@ async def chat_endpoint(payload: ChatRequest):
         # Combine the retrieved document matches into a single text block
         retrieved_context = ""
         if results and results['documents'] and results['documents'][0]:
-            retrieved_context = "\n".join(results['documents'][0])
+            retrieved_context = "\n".join(results['documents'][0]) if results['documents'] else ""
         
         # 3. Create a dynamic system prompt with the loaded documentation context
         system_instruction = (
@@ -81,14 +97,23 @@ async def chat_endpoint(payload: ChatRequest):
         )
 
         formatted_messages = [{'role': 'system', 'content': system_instruction}]
-        for msg in payload.history[-6:]:
+        for msg in chat_history[-5:]:
             formatted_messages.append({'role': msg['role'], 'content': msg['content']})
+
+            if saved_file_path:
+                formatted_messages[-1]['images'] = [saved_file_path]
 
         def event_generator():
             response_stream = ollama.chat(
-                model='qwen2.5-coder:7b',
+                model='qwen2.5vl:7b',
                 messages=formatted_messages,
-                options={'temperature': 0.2}, # Lower temperature keeps answers tied accurately to context
+                options={
+                    'temperature': 0.3,
+                    'repeat_penalty': 1.2,
+                    'frequency_penalty': 0.5,
+                    'top_k': 20,
+                    'top_p': 0.85
+                }, # Lower temperature keeps answers tied accurately to context
                 stream=True
             )
             
@@ -96,6 +121,9 @@ async def chat_endpoint(payload: ChatRequest):
                 content = chunk.message.content
                 if content:
                     yield f"data: {json.dumps({'response': content})}\n\n"
+
+                    if saved_file_path and os.path.exists(saved_file_path):
+                        os.remove(saved_file_path)
 
         return StreamingResponse(event_generator(), media_type="text/event-stream")
 
