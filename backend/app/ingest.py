@@ -1,6 +1,8 @@
 import os
 import ollama
+import json
 import chromadb
+import re
 
 # Path to your knowledge documents directory
 KNOWLEDGE_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), "../../knowledge"))
@@ -61,3 +63,95 @@ def batch_import_knowledge():
 
 if __name__ == "__main__":
     batch_import_knowledge()
+    
+
+def chunk_markdown(text, max_chars=1000):
+    """Splits markdown text into logical chunks based on sections and paragraphs."""
+    sections = re.split(r'(?=\n###? )', text)
+    chunks = []
+    for section in sections:
+        section = section.strip()
+        if not section:
+            continue
+        if len(section) > max_chars:
+            paragraphs = section.split("\n\n")
+            current_chunk = ""
+            for para in paragraphs:
+                if len(current_chunk) + len(para) < max_chars:
+                    current_chunk += para + "\n\n"
+                else:
+                    if current_chunk.strip():
+                        chunks.append(current_chunk.strip())
+                    current_chunk = para + "\n\n"
+            if current_chunk.strip():
+                chunks.append(current_chunk.strip())
+        else:
+            chunks.append(section)
+    return chunks
+
+def run_ingestion():
+    print("🚀 Starting Smart Vector Embedding Ingestion Pipeline...")
+    
+    DB_PATH = os.path.abspath("./chroma_db")
+    client = chromadb.PersistentClient(path=DB_PATH)
+    
+    try:
+        client.delete_collection(name="proxy_knowledge")
+    except Exception:
+        pass
+        
+    collection = client.get_or_create_collection(name="proxy_knowledge")
+    KNOWLEDGE_DIR = os.path.abspath("./knowledge")
+    
+    total_chunks_created = 0
+    
+    if not os.path.exists(KNOWLEDGE_DIR):
+        os.makedirs(KNOWLEDGE_DIR)
+        return {"chunks_processed": 0, "status": "knowledge_dir_created"}
+    
+    for filename in os.listdir(KNOWLEDGE_DIR):
+        if filename.endswith(".md"):
+            file_path = os.path.join(KNOWLEDGE_DIR, filename)
+            
+            try:
+                with open(file_path, "r", encoding="utf-8") as f:
+                    file_content = f.read()
+                
+                chunks = chunk_markdown(file_content)
+                print(f"✂️ Split {filename} into {len(chunks)} fragments.")
+                
+                for idx, chunk_text in enumerate(chunks):
+                    chunk_id = f"chunk_{filename.replace('.', '_')}_{idx}"
+                    
+                    # Subtask 4.3: Request embedding vectors from Ollama engine
+                    response = ollama.embeddings(
+                        model='nomic-embed-text',
+                        prompt=chunk_text
+                    )
+                    embedding_vector = response['embedding']
+                    
+                    # Subtask 4.4: Upsert vector array into local Chroma collection
+                    collection.upsert(
+                        ids=[chunk_id],
+                        embeddings=[embedding_vector], # Express vector math matrix explicitly
+                        documents=[chunk_text],
+                        metadatas=[{
+                            "source": filename, 
+                            "chunk_index": idx,
+                            "type": "documentation"
+                        }]
+                    )
+                    total_chunks_created += 1
+                    
+            except Exception as e:
+                print(f"❌ Failed to process vector matrix for {filename}: {str(e)}")
+                continue
+
+    print(f"🏁 Vector Database update complete! Generated {total_chunks_created} embeddings.")
+    return {
+        "chunks_processed": total_chunks_created,
+        "status": "completed_successfully"
+    }
+
+if __name__ == "__main__":
+    run_ingestion()

@@ -19,6 +19,9 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+DB_PATH = os.path.abspath("./chroma_db")
+chroma_client = chromadb.PersistentClient(path=DB_PATH)
+
 UPLOAD_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), "../..uploads"))
 os.makedirs(UPLOAD_DIR, exist_ok=True)
 
@@ -30,6 +33,25 @@ collection = chroma_client.get_or_create_collection(name="proxy_knowledge")
 # class ChatRequest(BaseModel):
 #     # message: str
 #     history: List[Dict[str, str]]
+
+
+@app.get("/health")
+async def health_check():
+    return {"status": "online", "engine": "ollama-local"}
+
+
+@app.post("/v1/ingest")
+async def trigger_ingest():
+    try:
+        from backend.app.ingest import run_ingestion
+        run_ingestion()
+
+        return {
+            "status": "success", 
+            "message": "Vector database updated successfully", 
+            }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Ingestion failed: {str(e)}")
 
 @app.post("/v1/chat")
 async def chat_endpoint(
@@ -121,16 +143,13 @@ async def chat_endpoint(
                 content = chunk.message.content
                 if content:
                     yield f"data: {json.dumps({'response': content})}\n\n"
-
-                    if saved_file_path and os.path.exists(saved_file_path):
-                        os.remove(saved_file_path)
+            
+            if saved_file_path and os.path.exists(saved_file_path):
+                os.remove(saved_file_path)
+                print(f"🗑️ Cleaned up temporary image asset at: {saved_file_path}")
 
         return StreamingResponse(event_generator(), media_type="text/event-stream")
 
     except Exception as e:
         print(f"Internal Backend Crash Error: {str(e)}")
         raise HTTPException(status_code=500, detail=f"Ollama Memory Error: {str(e)}")
-
-@app.get("/health")
-async def health_check():
-    return {"status": "online", "engine": "ollama-local"}
