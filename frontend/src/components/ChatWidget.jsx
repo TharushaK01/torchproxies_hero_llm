@@ -378,14 +378,14 @@ export default function ChatWidget() {
     <div className="flex flex-col h-[600px] w-full max-w-2xl mx-auto bg-white rounded-2xl shadow-xl border border-slate-200 overflow-hidden">
       <div className="bg-slate-900 text-white p-4 flex items-center justify-between">
         <div className="flex items-center gap-3">
-          <div className="p-2 bg-blue-600 rounded-lg"><Bot size={20} /></div>
-          <div>
+          {/* <div className="p-2 bg-blue-600 rounded-lg"><Bot size={20} /></div> */}
+          {/* <div>
             <h2 className="font-semibold text-sm md:text-base">Proxy AI Support</h2>
             <p className="text-xs text-emerald-400 flex items-center gap-1">
               <span className="h-1.5 w-1.5 rounded-full bg-emerald-400 animate-pulse"></span>
               Qwen 2.5 Coder Vision Active
             </p>
-          </div>
+          </div> */}
         </div>
       </div>
 
@@ -471,7 +471,7 @@ export default function ChatWidget() {
           type="text"
           value={input}
           onChange={(e) => setInput(e.target.value)}
-          placeholder={selectedFile ? "Add a note or hit send to analyze screenshot..." : "Ask about proxy pools, pricing, setup guides..."}
+          placeholder={selectedFile ? "Add a note or hit send to analyze screenshot..." : "Ask anything"}
           className="flex-1 border border-slate-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:border-blue-500 bg-slate-50 text-slate-900"
           disabled={isLoading}
         />
