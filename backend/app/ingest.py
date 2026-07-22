@@ -1,11 +1,21 @@
 import os
-import ollama
 import json
 import chromadb
 import re
+from openai import OpenAI
+from dotenv import load_dotenv
+
+# Initialize Environment Variable Engine Configurations
+load_dotenv()
 
 # Path to your knowledge documents directory
 KNOWLEDGE_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), "../../knowledge"))
+
+# Initialize OpenRouter Client wrapper mapped against native OpenRouter targets
+openrouter_client = OpenAI(
+    base_url="https://openrouter.ai/api/v1",
+    api_key=os.getenv("OPENROUTER_API_KEY")
+)
 
 # Connect to the persistent ChromaDB database folder
 chroma_client = chromadb.PersistentClient(path="./chroma_db")
@@ -43,9 +53,12 @@ def batch_import_knowledge():
             # Determine a simple category based on the file name
             category = "faq" if "faq" in file_name.lower() else "general"
             
-            print(f"🧠 Generating vector embeddings for: {file_name}...")
-            response = ollama.embed(model="nomic-embed-text", input=content)
-            embedding = response["embeddings"][0]
+            print(f"🧠 Generating vector embeddings via OpenRouter for: {file_name}...")
+            embed_response = openrouter_client.embeddings.create(
+                model="nvidia/llama-nemotron-embed-vl-1b-v2:free",
+                input=content
+            )
+            embedding = embed_response.data[0].embedding
             
             # Instantly insert or update the file contents inside ChromaDB
             collection.upsert(
@@ -61,9 +74,6 @@ def batch_import_knowledge():
             
     print("-"*50 + "\n🎉 Batch import complete! Your custom database is updated.")
 
-if __name__ == "__main__":
-    batch_import_knowledge()
-    
 
 def chunk_markdown(text, max_chars=1000):
     """Splits markdown text into logical chunks based on sections and paragraphs."""
@@ -101,17 +111,17 @@ def run_ingestion():
         pass
         
     collection = client.get_or_create_collection(name="proxy_knowledge")
-    KNOWLEDGE_DIR = os.path.abspath("./knowledge")
+    TARGET_KNOWLEDGE_DIR = os.path.abspath("./knowledge")
     
     total_chunks_created = 0
     
-    if not os.path.exists(KNOWLEDGE_DIR):
-        os.makedirs(KNOWLEDGE_DIR)
+    if not os.path.exists(TARGET_KNOWLEDGE_DIR):
+        os.makedirs(TARGET_KNOWLEDGE_DIR)
         return {"chunks_processed": 0, "status": "knowledge_dir_created"}
     
-    for filename in os.listdir(KNOWLEDGE_DIR):
+    for filename in os.listdir(TARGET_KNOWLEDGE_DIR):
         if filename.endswith(".md"):
-            file_path = os.path.join(KNOWLEDGE_DIR, filename)
+            file_path = os.path.join(TARGET_KNOWLEDGE_DIR, filename)
             
             try:
                 with open(file_path, "r", encoding="utf-8") as f:
@@ -123,17 +133,17 @@ def run_ingestion():
                 for idx, chunk_text in enumerate(chunks):
                     chunk_id = f"chunk_{filename.replace('.', '_')}_{idx}"
                     
-                    # Subtask 4.3: Request embedding vectors from Ollama engine
-                    response = ollama.embeddings(
-                        model='nomic-embed-text',
-                        prompt=chunk_text
+                    # Request embedding vectors via OpenRouter cloud infrastructure
+                    embed_response = openrouter_client.embeddings.create(
+                        model="nvidia/llama-nemotron-embed-vl-1b-v2:free",
+                        input=chunk_text
                     )
-                    embedding_vector = response['embedding']
+                    embedding_vector = embed_response.data[0].embedding
                     
-                    # Subtask 4.4: Upsert vector array into local Chroma collection
+                    # Upsert vector array into local Chroma collection
                     collection.upsert(
                         ids=[chunk_id],
-                        embeddings=[embedding_vector], # Express vector math matrix explicitly
+                        embeddings=[embedding_vector],
                         documents=[chunk_text],
                         metadatas=[{
                             "source": filename, 
