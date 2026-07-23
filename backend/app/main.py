@@ -303,25 +303,27 @@
 
 
 
+import base64
+import json
+import os
+import re
+import shutil
+import time
+from typing import Any, Dict, List
+from urllib.parse import urlparse
+from contextlib import asynccontextmanager
 
-from fastapi import FastAPI, HTTPException, UploadFile, File, Form
+from bs4 import BeautifulSoup
+import chromadb
+from dotenv import load_dotenv
+from fastapi import BackgroundTasks, FastAPI, File, Form, HTTPException, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse
-import os
-import shutil
-import json
-import base64
-from typing import List, Dict, Any
-import chromadb
-from openai import OpenAI
-from dotenv import load_dotenv
-from urllib.parse import urlparse
+from google.oauth2.service_account import Credentials
+import gspread
 import httpx
-import re
-from supabase import create_client, Client
-from bs4 import BeautifulSoup
-from fastapi import FastAPI, HTTPException, UploadFile, File, Form, BackgroundTasks # Added BackgroundTasks
-from openai import AsyncOpenAI # Switched from OpenAI to AsyncOpenAI
+from openai import AsyncOpenAI
+from supabase import Client, create_client
 
 # Load environment variables
 load_dotenv()
@@ -332,9 +334,128 @@ SUPABASE_KEY = os.getenv("SUPABASE_KEY")
 print(f"DEBUG -> Loaded SUPABASE_URL: '{SUPABASE_URL}'")
 supabase: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
 
-app = FastAPI(title="TorchProxies Enterprise AI Production Engine")
+# ==========================================
+# Google Sheets & Data Ingestion / Caching
+# ==========================================
+SCOPES = [
+    "https://www.googleapis.com/auth/spreadsheets",
+    "https://www.googleapis.com/auth/drive",
+]
+SPREADSHEET_ID = "1uyuGN3rwojkGPjzKrGr3CBCM4IAs2zwPExqEkfB7bMY"
+CACHE_TTL_SECONDS = 600  # 10 minutes cache TTL
 
-# CORS middleware alignment for the frontend dashboard interface
+# In-Memory Cache Store
+sheet1_cache = {
+    "raw_records": [],
+    "formatted_rules": "",
+    "last_fetched": 0
+}
+
+def get_sheets_client():
+    """Authenticates using service_account.json with guaranteed absolute path resolution."""
+    # 1. Locate the 'backend' directory dynamically relative to this main.py file
+    base_backend_dir = os.path.abspath(
+        os.path.join(os.path.dirname(__file__), "..")
+    )
+    
+    # 2. Target exact location: backend/service_account.json
+    creds_path = os.path.join(base_backend_dir, "service_account.json")
+
+    # 3. Validation check
+    if not os.path.exists(creds_path):
+        raise FileNotFoundError(
+            f"Service account file not found at absolute path: {creds_path}"
+        )
+
+    # 4. Authorize using the guaranteed absolute path
+    creds = Credentials.from_service_account_file(creds_path, scopes=SCOPES)
+    return gspread.authorize(creds)
+
+
+
+
+def clean_and_parse_sheet_data(records: List[Dict[str, Any]]) -> str:
+    """Sanitizes raw sheet rows and creates clean, structured LLM prompt rules."""
+    formatted_rules = []
+    
+    for row in records:
+        # Standardize and sanitize key/value strings
+        cat = str(row.get("category") or row.get("Category") or "").strip()
+        uc = str(row.get("use case") or row.get("Use Case") or "").strip()
+        rec = str(row.get("proxy type recomended") or row.get("Proxy Type Recommended") or "").strip()
+        prod = str(row.get("specific product") or row.get("Specific Product") or "").strip()
+        prompt_guide = str(row.get("prompt for llm") or row.get("Prompt for LLM") or "").strip()
+
+        # Filter out empty rows
+        if not cat and not uc and not prod:
+            continue
+
+        rule_entry = (
+            f"- Category: {cat} | Use Case: {uc} | "
+            f"Recommended Proxy: {rec} | Product: {prod} | Guidance: {prompt_guide}"
+        )
+        formatted_rules.append(rule_entry)
+
+    return "\n".join(formatted_rules)
+
+def fetch_and_cache_sheet1(force_refresh: bool = False) -> str:
+    """Ingests Sheet1 data, cleans it, and updates the in-memory cache if expired."""
+    current_time = time.time()
+    
+    # Check if cache is still valid
+    if not force_refresh and (current_time - sheet1_cache["last_fetched"] < CACHE_TTL_SECONDS) and sheet1_cache["formatted_rules"]:
+        return sheet1_cache["formatted_rules"]
+
+    try:
+        print("🔄 [Data Ingestion] Fetching fresh data from Google Sheets API...")
+        gc = get_sheets_client()
+        sh = gc.open_by_key(SPREADSHEET_ID)
+        sheet1 = sh.worksheet("Sheet1")
+        records = sheet1.get_all_records()
+
+        # Clean and cache
+        cleaned_rules = clean_and_parse_sheet_data(records)
+        sheet1_cache["raw_records"] = records
+        sheet1_cache["formatted_rules"] = cleaned_rules
+        sheet1_cache["last_fetched"] = current_time
+
+        print(f"✅ [Data Ingestion] Successfully cached {len(records)} rows from Sheet1.")
+        return cleaned_rules
+
+    except Exception as e:
+        print(f"⚠️ [Data Ingestion] Failed to refresh Sheet1 cache: {e}")
+        # Fallback to existing stale cache if available
+        return sheet1_cache["formatted_rules"]
+
+def log_unmapped_usecase_to_sheet2(
+    category: str,
+    usecase: str,
+    proxy_type: str = "Pending Review",
+    product: str = "Pending Review",
+):
+    """Appends new/unmapped user queries directly to Sheet2."""
+    try:
+        gc = get_sheets_client()
+        sh = gc.open_by_key(SPREADSHEET_ID)
+        sheet2 = sh.worksheet("Sheet2")
+
+        new_row = [category, usecase, proxy_type, product]
+        sheet2.append_row(new_row)
+        print(f"✅ Successfully logged new use case to Sheet2: {usecase}")
+    except Exception as e:
+        print(f"⚠️ Failed to write to Sheet2: {e}")
+
+# ==========================================
+# FastAPI Application Lifespan & Config
+# ==========================================
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    # App Startup: Pre-warm Google Sheets cache
+    fetch_and_cache_sheet1(force_refresh=True)
+    yield
+
+app = FastAPI(title="TorchProxies Enterprise AI Production Engine", lifespan=lifespan)
+
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["http://localhost:3000", "http://127.0.0.1:3000"],
@@ -347,124 +468,162 @@ DB_PATH = os.path.abspath("./chroma_db")
 UPLOAD_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), "../../uploads"))
 os.makedirs(UPLOAD_DIR, exist_ok=True)
 
-# Centralized OpenRouter Cloud Client
 openrouter_client = AsyncOpenAI(
-    base_url="https://openrouter.ai/api/v1",
-    api_key=os.getenv("OPENROUTER_API_KEY")
+    base_url="https://openrouter.ai/api/v1", api_key=os.getenv("OPENROUTER_API_KEY")
 )
 
-# Active connection array mapped to the cloud-embedded local Vector DB
 chroma_client = chromadb.PersistentClient(path=DB_PATH)
 collection = chroma_client.get_or_create_collection(name="proxy_knowledge")
 
-
 def encode_image_to_base64(image_path: str) -> str:
-    """Encodes temporary local visual assets into base64 strings for OpenRouter submission."""
     with open(image_path, "rb") as image_file:
         return base64.b64encode(image_file.read()).decode("utf-8")
 
+def extract_url_from_text(text: str) -> str | None:
+    url_pattern = r"(https?://[^\s]+|(?:[a-zA-Z0-9-]+\.)+[a-zA-Z]{2,})"
+    match = re.search(url_pattern, text)
+    if match:
+        return match.group(0)
+    return None
 
 async def analyze_target_url(url: str) -> str:
-    """Scrapes site metadata and maps it to the target use case."""
+    if not url.startswith(("http://", "https://")):
+        url = f"https://{url}"
+
+    domain = urlparse(url).netloc.replace("www.", "")
+    headers = {
+        "User-Agent": (
+            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
+            " (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+        ),
+        "Accept-Language": "en-US,en;q=0.9",
+    }
+
     try:
-        if not url.startswith(("http://", "https://")):
-            url = f"https://{url}"
-            
-        domain = urlparse(url).netloc.replace("www.", "")
-        
-        async with httpx.AsyncClient(follow_redirects=True, timeout=3.0) as client:
-            res = await client.get(url, headers={"User-Agent": "Mozilla/5.0"})
+        async with httpx.AsyncClient(follow_redirects=True, timeout=5.0) as client:
+            res = await client.get(url, headers=headers)
             soup = BeautifulSoup(res.text, "html.parser")
+
             title = soup.title.string.strip() if soup.title and soup.title.string else ""
-            
             meta_desc = ""
             desc_tag = soup.find("meta", attrs={"name": "description"}) or soup.find("meta", attrs={"property": "og:description"})
             if desc_tag:
                 meta_desc = desc_tag.get("content", "")
 
-        combined_text = f"Domain: {domain} | Title: {title} | Description: {meta_desc}".lower()
-        
-        # Sneaker & E-commerce sites
-        if any(k in combined_text for k in ["nike", "adidas", "yeezy", "footlocker", "supreme", "sneakers", "shoes", "kicks"]):
-            return f"The target URL is '{domain}' (Sneakers/Footwear). Recommend our dedicated ISP Proxies for Sneakers."
-            
-        # Ticketing platforms
-        elif any(k in combined_text for k in ["ticketmaster", "axs", "stubhub", "tickets", "concert", "event"]):
-            return f"The target URL is '{domain}' (Ticketing). Recommend our dedicated ISP Proxies for Tickets."
-            
-        # Social Media platforms
-        elif any(k in combined_text for k in ["instagram", "tiktok", "twitter", "x.com", "facebook", "social media"]):
-            return f"The target URL is '{domain}' (Social Media). Recommend our dedicated ISP Proxies for Social Media."
-            
-        # General Web Scraping / E-commerce targets
-        else:
-            return f"The target URL is '{domain}'. If scraping data from this site, recommend our ISP Proxies for Web Scraping or Residential Proxies (PlanX)."
-            
+            og_site_name = ""
+            og_tag = soup.find("meta", attrs={"property": "og:site_name"})
+            if og_tag:
+                og_site_name = og_tag.get("content", "")
+
+            headings = [h.get_text(strip=True) for h in soup.find_all(["h1", "h2"])[:5]]
+
+            return json.dumps({
+                "domain": domain,
+                "title": title,
+                "site_name": og_site_name,
+                "meta_description": meta_desc,
+                "key_headings": headings,
+                "http_status": res.status_code,
+            })
     except Exception as err:
-        return ""
-
-
-# def save_message_to_supabase(session_id: str, role: str, content: str):
-    # """Inserts a single message row into the Supabase 'messages' table."""
-    # try:
-    #     supabase.table("messages").insert({
-    #         "session_id": session_id,
-    #         "role": role,
-    #         "content": content
-    #     }).execute()
-    # except Exception as err:
-    #     print(f"⚠️ Failed to save message to Supabase: {err}")
+        return json.dumps({"domain": domain, "error": f"Could not scrape live content: {str(err)}"})
 
 def save_message_to_supabase(session_id: str, role: str, content: str):
     try:
-        supabase.table("messages").insert({
-            "session_id": session_id,
-            "role": role,
-            "content": content
-        }).execute()
-    except Exception as err:  # <--- Aligned with 'try:' (4 spaces)
+        supabase.table("messages").insert(
+            {"session_id": session_id, "role": role, "content": content}
+        ).execute()
+    except Exception as err:
         print(f"⚠️ Failed to save message to Supabase: {err}")
 
-
-
-def get_session_history_from_supabase(session_id: str):
-    """Retrieves all past messages for a given session sorted chronologically."""
+async def check_and_log_unmapped_usecase(query: str, sheet1_rules: str):
+    """Background task: Uses LLM to evaluate if the query was present in Sheet1 context."""
     try:
-        res = supabase.table("messages") \
-            .select("role, content") \
-            .eq("session_id", session_id) \
-            .order("created_at", desc=False) \
-            .execute()
-        return res.data
-    except Exception as err:
-        print(f"⚠️ Failed to fetch history from Supabase: {err}")
-        return []
+        analysis_prompt = f"""
+You are an auditor analyzing whether a user request matches known spreadsheet rules.
 
+--- SHEET1 RULES ---
+{sheet1_rules}
+
+--- USER REQUEST ---
+{query}
+
+Task:
+1. Determine if the user's scenario/use case is explicitly covered in the SHEET1 RULES above.
+2. Output ONLY a valid JSON object with:
+   - "is_mapped": true or false
+   - "category": "General domain string"
+   - "usecase": "Brief summary of query"
+
+Respond ONLY with valid JSON.
+"""
+        response = await openrouter_client.chat.completions.create(
+            model="google/gemma-4-26b-a4b-it:free",
+            messages=[{"role": "user", "content": analysis_prompt}],
+            temperature=0.0,
+        )
+
+        raw_json = response.choices[0].message.content.strip()
+        raw_json = re.sub(r"^```json\s*|\s*```$", "", raw_json, flags=re.MULTILINE)
+        data = json.loads(raw_json)
+
+        if not data.get("is_mapped", True):
+            category = data.get("category", "Uncategorized")
+            usecase = data.get("usecase", query)
+            log_unmapped_usecase_to_sheet2(
+                category=category,
+                usecase=usecase,
+                proxy_type="Pending Review",
+                product="Pending Review",
+            )
+    except Exception as e:
+        print(f"⚠️ Background Sheet2 check failed: {e}")
 
 @app.get("/health")
 async def health_check():
-    return {"status": "online", "pipeline": "openrouter-cloud-integrated"}
+    return {
+        "status": "online",
+        "cache_last_fetched": sheet1_cache["last_fetched"],
+        "cached_rules_count": len(sheet1_cache["raw_records"]),
+    }
 
+@app.post("/v1/admin/refresh-cache")
+async def manual_cache_refresh():
+    """Admin endpoint to force refresh the Google Sheets rules cache on demand."""
+    rules = fetch_and_cache_sheet1(force_refresh=True)
+    return {"status": "success", "cached_rules": rules}
 
 @app.post("/v1/chat")
 async def chat_endpoint(
     background_tasks: BackgroundTasks,
     history: str = Form(...),
     session_id: str = Form("default_session"),
-    file: UploadFile = File(None)
+    file: UploadFile = File(None),
 ):
-    # 1. Parse incoming UI historical data map
-    chat_history = json.loads(history)
-    user_messages = [m for m in chat_history if m["role"] == "user"]
-    if not user_messages:
-        raise HTTPException(status_code=400, detail="No valid input query found.")
-    latest_query = user_messages[-1]["content"]
-
-    # 2. Save incoming message to Supabase
-    background_tasks.add_task(save_message_to_supabase, session_id, "user", latest_query)
-
     try:
-        # 3. Process physical file assets
+        # 1. Parse incoming user query from request history
+        chat_history = json.loads(history)
+        user_messages = [m for m in chat_history if m["role"] == "user"]
+        if not user_messages:
+            raise HTTPException(status_code=400, detail="No valid input query found.")
+        latest_query = user_messages[-1]["content"]
+
+        # 2. Save incoming user message to Supabase
+        background_tasks.add_task(save_message_to_supabase, session_id, "user", latest_query)
+
+        # 3. Off-Topic Keyword Guardrail Check
+        HARD_OFF_TOPIC = ["recipe", "cooking", "food", "sports", "football", "movie", "gossip", "politics"]
+        if any(word in latest_query.lower() for word in HARD_OFF_TOPIC):
+            def instant_fallback():
+                fallback_msg = (
+                    "I apologize, but as the Torch Proxies assistant, I can only help you with our proxy services. "
+                    "If you need general assistance, please [Chat with a Live Agent](https://torchproxies.com/chatwoot)."
+                )
+                yield f"data: {json.dumps({'response': fallback_msg})}\n\n"
+
+            return StreamingResponse(instant_fallback(), media_type="text/event-stream")
+
+        # 4. Handle file/image uploads
         saved_file_path = None
         base64_image = None
         if file is not None and file.filename:
@@ -473,92 +632,82 @@ async def chat_endpoint(
                 shutil.copyfileobj(file.file, buffer)
             base64_image = encode_image_to_base64(saved_file_path)
 
-        # 4. Fast Static Off-Topic Keyword Guardrail Check
-        HARD_OFF_TOPIC = ["recipe", "cooking", "food", "sports", "football", "movie", "gossip", "politics"]
-        if any(word in latest_query.lower() for word in HARD_OFF_TOPIC):
-            def instant_fallback():
-                yield f"data: {json.dumps({'response': 'I apologize, but as the Torch Proxies assistant, I can only help you with our proxy services. If you need general assistance, please [Chat with a Live Agent](https://torchproxies.com/chatwoot).'})}\n\n"
-            return StreamingResponse(instant_fallback(), media_type="text/event-stream")
+        # 5. Extract URL & analyze target website metadata
+        detected_url = extract_url_from_text(latest_query)
+        site_json = "{}"
+        if detected_url:
+            site_json = await analyze_target_url(detected_url)
 
-        # 5. URL Extraction & Analysis Pass
-        url_match = re.search(r'(https?://[^\s]+|[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}[^\s]*)', latest_query)
-        detected_url_context = ""
-        if url_match:
-            extracted_url = url_match.group(0)
-            detected_url_context = await analyze_target_url(extracted_url)
+        # 6. Retrieve rules from In-Memory Caching Layer (Zero network delay)
+        sheet1_rules = fetch_and_cache_sheet1()
 
-        # 6. Context Extraction (via Cloud Embedding Engine)
+        # Schedule background check to log unmapped queries to Sheet2
+        background_tasks.add_task(check_and_log_unmapped_usecase, latest_query, sheet1_rules)
+
+        # 7. RAG Context Extraction (ChromaDB)
         retrieved_context = ""
         try:
             existing_collections = [c.name for c in chroma_client.list_collections()]
             if "proxy_knowledge" in existing_collections and collection.count() > 0:
                 embed_response = openrouter_client.embeddings.create(
                     model="nvidia/llama-nemotron-embed-vl-1b-v2:free",
-                    input=latest_query
+                    input=latest_query,
                 )
                 query_embedding = embed_response.data[0].embedding
-                
-                results = collection.query(
-                    query_embeddings=[query_embedding],
-                    n_results=2
-                )
-                if results and results.get('documents') and results['documents'][0]:
-                    retrieved_context = "\n---\n".join(results['documents'][0])
+                results = collection.query(query_embeddings=[query_embedding], n_results=2)
+                if results and results.get("documents") and results["documents"][0]:
+                    retrieved_context = "\n---\n".join(results["documents"][0])
         except Exception as db_err:
-            print(f"⚠️ Context lookup bypassed: {str(db_err)}")
+            print(f"⚠️ Vector lookup bypassed: {str(db_err)}")
 
-        # 7. System Instruction Setup
-        system_instruction = (
-            "You are the official Torch Proxies support assistant. You must enforce these explicit system guardrails:\n\n"
-            
-            "--- CRITICAL RULE: BREVITY & CONCISENESS ---\n"
-            "Keep all responses extremely brief, direct, and to-the-point. Limit your answers to 1-3 short sentences maximum.\n\n"
-            
-            f"--- DETECTED TARGET WEBSITE ANALYSIS ---\n{detected_url_context}\n\n"
+        # 8. System Prompt Assembly
+        system_instruction = f"""
+You are the official technical proxy recommendation agent for TorchProxies.
 
-            "--- PRODUCT RULE 1: RESIDENTIAL PROXIES ---\n"
-            "If the user asks about Residential Proxies, recommend 'PlanX'. Mention they use GB and Credits. Keep it to one sentence.\n\n"
-            
-            "--- PRODUCT RULE 2: ISP PROXIES ---\n"
-            "If inquiring about Sneakers, Tickets, Social Media, or Web Scraping (or a website in those categories), recommend 'ISP Proxy' on a monthly renewal. Keep it to one sentence.\n\n"
-            
-            "--- PRODUCT RULE 3: LIVE AGENT ESCALATION ---\n"
-            "For custom bulk pricing, billing, bugs, or off-topic chats, immediately direct them to: [Chat with a Live Agent](https://torchproxies.com/chatwoot).\n\n"
-            
-            f"--- LOCAL PRODUCT REFERENCE MATRIX ---\n{retrieved_context}\n--------------------------------------"
-        )
+--- CRITICAL RULE: BREVITY & CONCISENESS ---
+Keep all responses extremely brief, direct, and to-the-point. Limit your answers to 1-3 short sentences maximum.
 
-        # 8. Structuring Payload Messages
-        formatted_messages = [{'role': 'system', 'content': system_instruction}]
-        
+--- SPREADSHEET (SHEET1) RECOMMENDED PRODUCT RULES ---
+Use these exact spreadsheet rules as your primary source for recommending products:
+{sheet1_rules}
+
+--- DETECTED TARGET WEBSITE METADATA (JSON) ---
+<site_context>
+{site_json}
+</site_context>
+
+--- PRODUCT RULE: LIVE AGENT ESCALATION ---
+For custom bulk pricing, billing issues, bugs, or unhandled requests, direct customers to: [Chat with a Live Agent](https://torchproxies.com/chatwoot).
+
+--- VECTOR KNOWLEDGE BASE CONTEXT ---
+{retrieved_context}
+--------------------------------------
+"""
+
+        # 9. Format Payload Messages
+        formatted_messages = [{"role": "system", "content": system_instruction}]
+
         for msg in chat_history[-4:]:
-            formatted_messages.append({'role': msg['role'], 'content': msg['content']})
+            formatted_messages.append({"role": msg["role"], "content": msg["content"]})
 
         if base64_image:
-            formatted_messages[-1]['content'] = [
+            formatted_messages[-1]["content"] = [
                 {"type": "text", "text": latest_query},
-                {
-                    "type": "image_url",
-                    "image_url": {
-                        "url": f"data:image/jpeg;base64,{base64_image}"
-                    }
-                }
+                {"type": "image_url", "image_url": {"url": f"data:image/jpeg;base64,{base64_image}"}},
             ]
 
-        # 9. Asynchronous Streaming Response Pipeline Execution
+        # 10. Asynchronous Streaming Response Pipeline
         async def event_generator():
             full_ai_response = ""
             try:
                 response_stream = await openrouter_client.chat.completions.create(
-                    model= "google/gemma-4-26b-a4b-it:free",
+                    model="google/gemma-4-26b-a4b-it:free",
                     messages=formatted_messages,
                     temperature=0.2,
                     stream=True,
-                    extra_body={
-                        "reasoning": {"enabled": True}  #True change to False
-                    }
+                    extra_body={"reasoning": {"enabled": False}},
                 )
-                
+
                 async for chunk in response_stream:
                     if chunk.choices and len(chunk.choices) > 0:
                         content = chunk.choices[0].delta.content
@@ -566,7 +715,6 @@ async def chat_endpoint(
                             full_ai_response += content
                             yield f"data: {json.dumps({'response': content})}\n\n"
 
-                # Save AI response to Supabase once streaming completes
                 if full_ai_response:
                     background_tasks.add_task(
                         save_message_to_supabase, session_id, "assistant", full_ai_response
