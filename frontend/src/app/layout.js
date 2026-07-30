@@ -15,17 +15,19 @@
 //   );
 // }
 
-import "./globals.css";
+import { Urbanist } from 'next/font/google';
+import './globals.css';
 
-export const metadata = {
-  title: "Proxy AI Chatbot",
-  description: "Standalone Local LLM interface",
-};
+const urbanist = Urbanist({ 
+  subsets: ['latin'],
+  weight: ['100', '200', '300', '400', '500', '600', '700', '800', '900'],
+  variable: '--font-urbanist',
+});
 
 export default function RootLayout({ children }) {
   return (
-    <html lang="en" suppressHydrationWarning>
-      <body className="antialiased bg-slate-100">
+    <html lang="en" className={urbanist.variable}>
+      <body className="font-sans antialiased">
         {children}
       </body>
     </html>

@@ -1,49 +1,98 @@
-import ChatWidget from '@/components/ChatWidget';
-
-export default function Home() {
-  return (
-    <main className="min-h-screen flex flex-col items-center justify-center p-4">
-      <div className="w-full max-w-2xl text-center mb-6">
-        <h1 className="text-3xl font-extrabold text-slate-900 tracking-tight">
-          Search faster, think deeper.
-        </h1>
-        <p className="text-slate-600 mt-2 text-sm">
-          Engage with our AI chatbot and discover a best proxies for your need.
-        </p>
-      </div>
-
-      <ChatWidget />
-    </main>
-  );
-}
-
-
-// import ChatWidget from "@/components/ChatWidget";
+// import ChatWidget from '@/components/ChatWidget';
 
 // export default function Home() {
 //   return (
-//     <main className="relative min-h-screen overflow-hidden bg-[#0D0D0F] flex items-center justify-center px-6">
-
-//       {/* Orange Glow */}
-//       <div className="absolute -bottom-52 -left-52 w-[850px] h-[850px] rounded-full bg-orange-500 blur-[180px] opacity-80" />
-
-//       {/* Dark Overlay */}
-//       <div className="absolute inset-0 bg-gradient-to-b from-black/10 via-transparent to-black/20" />
-
-//       {/* Content */}
-//       <div className="relative z-10 w-full max-w-5xl text-center">
-//         <h1 className="text-6xl font-extralight tracking-tight text-white">
+//     <main className="min-h-screen flex flex-col items-center justify-center p-4">
+//       <div className="w-full max-w-2xl text-center mb-6">
+//         <h1 className="text-3xl font-extrabold text-slate-900 tracking-tight">
 //           Search faster, think deeper.
 //         </h1>
-
-//         <p className="mt-5 text-lg text-gray-400">
+//         <p className="text-slate-600 mt-2 text-sm">
 //           Engage with our AI chatbot and discover a best proxies for your need.
 //         </p>
-
-//         <div className="mt-12">
-//           <ChatWidget />
-//         </div>
 //       </div>
+
+//       <ChatWidget />
 //     </main>
 //   );
 // }
+
+import ChatWidget from '@/components/ChatWidget';
+import { Check } from 'lucide-react';
+
+export default function Home() {
+  return (
+    <main className="min-h-screen w-full bg-hero-radial relative flex items-center justify-center p-6 md:p-12 overflow-hidden">
+      <div className="w-full max-w-7xl mx-auto grid grid-cols-1 lg:grid-cols-12 gap-12 lg:gap-8 items-center z-10">
+
+        {/* Left Hero Section */}
+        <div className="lg:col-span-6 flex flex-col justify-center space-y-8">
+          <div className="space-y-4">
+            <h1 style={{ fontFamily: "'Urbanist', sans-serif" }} className="text-[120px] font-regular tracking-tight text-white leading-[1.02]">
+              <span className="text-orange-500 ">Unblock <br /></span>
+              every <br />
+              corner of <br />
+              <span className="text-orange-500 font-bold">the web.</span>
+            </h1>
+
+            <p
+              className="text-slate-200 text-base sm:text-lg max-w-lg pt-2 leading-relaxed font-regular"
+            >
+              Residential & ISP proxies for Shopify, sneaker, ticket sites with city targeting, ASN diversity, auto retry, real 10 Gbps lines.
+            </p>
+          </div>
+
+          {/* Feature Badges */}
+          <div className="flex flex-wrap items-center gap-x-6 gap-y-3 text-xs sm:text-sm text-slate-200 font-regular">
+            <div className="flex items-center gap-2">
+              <Check className="text-orange-500 w-4 h-4 stroke-[3]" />
+              <span>Rotating & Static IPs</span>
+            </div>
+            <div className="flex items-center gap-2">
+              <Check className="text-orange-500 w-4 h-4 stroke-[3]" />
+              <span>Unlimited Concurrency</span>
+            </div>
+            <div className="flex items-center gap-2">
+              <Check className="text-orange-500 w-4 h-4 stroke-[3]" />
+              <span>195+ Countries</span>
+            </div>
+          </div>
+
+          {/* CTA Buttons */}
+          <div className="flex flex-wrap items-center gap-4 pt-2">
+            <a
+              href="#pricing"
+              className="px-8 py-3.5 rounded-xl text-sm font-semibold text-slate-200 border border-slate-700/80 hover:border-slate-500 hover:bg-white/5 transition-all duration-200 text-center min-w-[140px]"
+            >
+              See Pricing
+            </a>
+            <a
+              href="#start"
+              className="px-8 py-3.5 rounded-xl text-sm font-semibold text-white bg-gradient-to-r from-orange-500 to-amber-600 hover:from-orange-600 hover:to-amber-700 shadow-lg shadow-orange-500/20 transition-all duration-200 text-center min-w-[140px]"
+            >
+              Start with 1GB
+            </a>
+          </div>
+        </div>
+
+        {/* Right Section: AI Chatbot Interface */}
+        <div className="lg:col-span-6 flex flex-col items-center lg:items-end justify-center w-full">
+          <div className="w-full max-w-xl space-y-4">
+            <div className="text-center lg:text-left space-y-1">
+              <h2 className="text-2xl sm:text-3xl font-semibold text-white tracking-tight">
+                Search faster, think deeper.
+              </h2>
+              <p className="text-slate-400 text-xs sm:text-sm">
+                Engage with our AI chatbot and discover the best proxies for your need.
+              </p>
+            </div>
+
+            {/* Chat Widget Container */}
+            <ChatWidget />
+          </div>
+        </div>
+
+      </div>
+    </main>
+  );
+}
