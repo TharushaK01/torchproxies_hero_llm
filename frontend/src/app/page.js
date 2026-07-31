@@ -28,12 +28,15 @@ export default function Home() {
         {/* Left Hero Section */}
         <div className="lg:col-span-6 flex flex-col justify-center space-y-8">
           <div className="space-y-4">
-            <h1 style={{ fontFamily: "'Urbanist', sans-serif" }} className="text-[120px] font-regular tracking-tight text-white leading-[1.02]">
-              <span className="text-orange-500 ">Unblock <br /></span>
-              every <br />
-              corner of <br />
-              <span className="text-orange-500 font-bold">the web.</span>
-            </h1>
+            <h1 
+  style={{ fontFamily: "'Urbanist', sans-serif" }} 
+  className="text-[42px] sm:text-7xl lg:text-[120px] font-normal tracking-tight text-white leading-[1.08]"
+>
+  <span className="text-orange-500 italic sm:not-italic">Unblock </span>
+  every <br className="hidden sm:inline" />
+  corner of{" "}
+  <span className="text-orange-500 font-bold">the web.</span>
+</h1>
 
             <p
               className="text-slate-200 text-base sm:text-lg max-w-lg pt-2 leading-relaxed font-regular"
@@ -41,8 +44,6 @@ export default function Home() {
               Residential & ISP proxies for Shopify, sneaker, ticket sites with city targeting, ASN diversity, auto retry, real 10 Gbps lines.
             </p>
           </div>
-
-          {/* Feature Badges */}
           <div className="flex flex-wrap items-center gap-x-6 gap-y-3 text-xs sm:text-sm text-slate-200 font-regular">
             <div className="flex items-center gap-2">
               <Check className="text-orange-500 w-4 h-4 stroke-[3]" />
@@ -79,7 +80,7 @@ export default function Home() {
         <div className="lg:col-span-6 flex flex-col items-center lg:items-end justify-center w-full">
           <div className="w-full max-w-xl space-y-4">
             <div className="text-center lg:text-left space-y-1">
-              <h2 className="text-2xl sm:text-3xl font-semibold text-white tracking-tight">
+              <h2 className="text-[48px] sm:text-[48px] font-regular text-white tracking-tight">
                 Search faster, think deeper.
               </h2>
               <p className="text-slate-400 text-xs sm:text-sm">
