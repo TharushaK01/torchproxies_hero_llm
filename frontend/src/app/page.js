@@ -80,10 +80,10 @@ export default function Home() {
         <div className="lg:col-span-6 flex flex-col items-center lg:items-end justify-center w-full">
           <div className="w-full max-w-xl space-y-4">
             <div className="text-center lg:text-left space-y-1">
-              <h2 className="text-[48px] sm:text-[48px] font-regular text-white tracking-tight">
+              <h2 className="text-[22px] sm:text-[48px] font-regular text-white tracking-tight">
                 Search faster, think deeper.
               </h2>
-              <p className="text-slate-400 text-xs sm:text-sm">
+              <p className="text-slate-400 text-[12px] sm:text-[18px] max-w-[250px] text-center mx-auto sm:max-w-[580px]">
                 Engage with our AI chatbot and discover the best proxies for your need.
               </p>
             </div>
